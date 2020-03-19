@@ -15,9 +15,13 @@ data <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
 data<- data%>%filter(granularite == "departement")%>%select(- source_nom,-source_url,-granularite)
 data<- unique(data)
 data[is.na(data)]<-0
+
+
 data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
-
-
+data$date<- as.Date(data$date, "%Y-%m-%d")
+data<- data %>%group_by(maille_code)%>%
+  
+  mutate(cumsumdeath = cumsum(deces)) 
 
 # names(data)
 url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
