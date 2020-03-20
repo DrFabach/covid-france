@@ -81,12 +81,13 @@ data_dec[is.na(data_dec)]<-0
 
 # https://www.data.gouv.fr/fr/datasets/contours-des-departements-francais-issus-d-openstreetmap/
 
-countries <- readOGR(dsn ="departements-20140306-5m-shp",
-                     encoding = "utf-8",use_iconv = T,
-                     verbose = FALSE)
+#countries <- readOGR(dsn ="departements-20140306-5m-shp",
+                     # encoding = "utf-8",use_iconv = T,
+                     # verbose = FALSE)
+
 
 # save(countries, file="shapeFile.RData")
-# load("shapeFile.RData")
+load("shapeFile.RData")
 
 #https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population
 
@@ -105,6 +106,8 @@ jourDate<- as.Date(jour)
 names(data_cas)[str_detect(names(data_cas), "-")]<-format.Date(jourDate, "%m/%d/%y")
 names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
+
+dateMin<- as.Date("2020-02-24")
 
 countries$code_insee
 data_cas<-left_join(population,data_cas)
@@ -203,7 +206,7 @@ server <- function(input, output, session) {
     
     leaflet(data = countries) %>%
       
-      setView(0, 30, zoom = 3)
+      setView(-0.5, 47, zoom = 6)
     
     
   })
@@ -227,7 +230,7 @@ server <- function(input, output, session) {
       indicator2<-format.Date(input$day2-c(1,0), "%m/%d/%y")
       
     }else{
-      indicator2 =format.Date(c(min(jourDate)-1,max(jourDate)), "%m/%d/%y")
+      indicator2 =format.Date(c(dateMin-1,max(jourDate)), "%m/%d/%y")
     }
     
     if(is.null(input$variable)){
@@ -254,7 +257,7 @@ server <- function(input, output, session) {
         
         leafletProxy("map", data = countries2)%>%
           addPolygons(fillColor = pal2()(log((countries2[[indicator]]/countries2$Pop*100000)+1)),
-                      layerId = ~nom,
+                      layerId = ~code_insee,
                       fillOpacity = 1,
                       color = "#BDBDC3",
                       weight = 1,
@@ -279,7 +282,7 @@ server <- function(input, output, session) {
         leafletProxy("map", data = countries2)%>%
           addPolygons(fillColor = pal()(log((countries2[[indicator]])+1)),
                       fillOpacity = 1,
-                      layerId = ~nom,
+                      layerId = ~code_insee,
                       color = "#BDBDC3",
                       weight = 1,
                       popup = country_popup)
@@ -288,7 +291,7 @@ server <- function(input, output, session) {
       }else if(variable =="New cases over period"){
         
         datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
-        if(indicator2[1] == format.Date(min(jourDate)-1, "%m/%d/%y")){
+        if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
           
           datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]
         }else{
@@ -315,13 +318,13 @@ server <- function(input, output, session) {
           addPolygons(fillColor = pal()(log(countries2$ncases+1)),
                       fillOpacity = 1,
                       color = "#BDBDC3",
-                      layerId = ~nom,
+                      layerId = ~code_insee,
                       weight = 1,
                       popup = country_popup)
       }else{
         
         datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
-        if(indicator2[1] == format.Date(min(jourDate)-1, "%m/%d/%y")){
+        if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
           
           datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]
         }else{
@@ -348,7 +351,7 @@ server <- function(input, output, session) {
           addPolygons(fillColor = pal2()(log(countries2$ncases/countries2$Pop*100000+1)),
                       fillOpacity = 1,
                       color = "#BDBDC3",
-                      layerId = ~nom,
+                      layerId = ~code_insee,
                       weight = 1,
                       popup = country_popup)
         
@@ -418,15 +421,15 @@ server <- function(input, output, session) {
       
     }else{
       if(input$variable %in% c("Total cases", "Total cases/population")){
-        sliderInput("day1", "Day", min(jourDate), max(jourDate),
+        sliderInput("day1", "Day", dateMin, max(jourDate),
                     value =  c(max(jourDate)),animate = T, step = 1
                     
-                    #min(jourDate),
+                    #dateMin,
         )}else{
-          sliderInput("day2", "Day", min(jourDate), max(jourDate),
+          sliderInput("day2", "Day", dateMin, max(jourDate),
                       value =  c(max(jourDate)-7,max(jourDate)),animate = T, step = 1
                       
-                      #min(jourDate),
+                      #dateMin,
           )
           
         }
