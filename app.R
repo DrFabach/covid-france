@@ -58,21 +58,19 @@ data_dec<-data[,c("date","maille_code","deces")]
 data_cas<-pivot_wider(data_cas, id_cols = "maille_code",names_from = "date",values_from = "cas_confirmes")
 data_dec<-pivot_wider(data_dec, id_cols = "maille_code",names_from = "date",values_from = "deces")
 
-# Remplace les NA par donnee prec
+# Remplace les NA par donnee prec ou 0
 for(i in 1:nrow(data_cas)){
-  for(j in 3:ncol(data_cas)){
+  for(j in 2:ncol(data_cas)){
     if(is.na(data_cas[i,j])){
-    data_cas[i,j]<-data_cas[i,j-1]
+      data_cas[i,j]<-0
     }
     if(is.na(data_dec[i,j])){
-    data_dec[i,j]<-data_dec[i,j-1]
+      data_dec[i,j]<-0
     }
+    data_cas[i,j]<-max(data_cas[i,2:j],na.rm=TRUE)
+    data_dec[i,j]<-max(data_dec[i,2:j],na.rm=TRUE)
   }
 }
-
-# Remplace par 0 si pas de prec
-data_cas[is.na(data_cas)]<-0
-data_dec[is.na(data_dec)]<-0
 
 
 # names(data)
