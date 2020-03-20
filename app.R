@@ -1,13 +1,6 @@
 #Test1
 
-install.packages('shiny')
-install.packages('leaflet')
-install.packages('RColorBrewer')
-install.packages('rgdal')
-install.packages('RCurl')
-install.packages('plotly')
-install.packages('viridis')
-install.packages('tidyverse')
+
 
 library(shiny)
 library(leaflet)
@@ -27,7 +20,7 @@ data<- data%>%filter(granularite == "departement")%>%select(- source_nom,-source
 data<- unique(data)
 data[is.na(data)]<-0
 data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
-
+data$maille_code<-gsub("DEP-","",data$maille_code)
 # Ajout des dates manquantes
 dates<-unique(as.Date(data$date,format="%Y-%m-%d"))
 datemiss<-NULL
@@ -83,18 +76,17 @@ data_dec[is.na(data_dec)]<-0
 
 
 # names(data)
-url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
+# url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
 # 
 
-# https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/
+# https://www.data.gouv.fr/fr/datasets/contours-des-departements-francais-issus-d-openstreetmap/
 
-# countries <- readOGR(dsn ="ne_50m_admin_0_countries", 
-#                      layer = "ne_50m_admin_0_countries", 
-#                      encoding = "utf-8",use_iconv = T,
-#                      verbose = FALSE)
+countries <- readOGR(dsn ="departements-20140306-5m-shp",
+                     encoding = "utf-8",use_iconv = T,
+                     verbose = FALSE)
 
 # save(countries, file="shapeFile.RData")
-load("shapeFile.RData")
+# load("shapeFile.RData")
 
 #https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population
 
@@ -105,26 +97,36 @@ population<- read.csv2("pop.csv",stringsAsFactors = F)
 population$pays<-as.character(unique(countries$NAME)[charmatch(population$Country,unique(countries$NAME))])
 
 
-URL <- getURL("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv")
-data <- read.csv(text = URL, check.names = F)
-dataDeaths<- dataCook(data, pop, countries)
+
+dataPays<-function(data=data_cas) return(data)
+jour<-names(data_cas%>%select(contains( "-")))
+jourDate<- as.Date(jour)
+names(data_cas)[str_detect(names(data_cas), "-")]<-format.Date(jourDate, "%m/%d/%y")
+names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
 
+countries$code_insee
+data_cas<-left_join(data.frame(Pays = countries$NAME%>%as.character(), Pop =countries$POP_EST%>%as.character()%>%as.numeric()),data_cas)
 
-dataPays<-function(data=dataCases) return(data)
-jour<-names(dataCases%>%select(contains( "/")))
-jourDate<- as.Date(jour, "%m/%d/%y")
-names(dataCases)[str_detect(names(dataCases), "/")]<-format.Date(jourDate, "%m/%d/%y")
-names(dataDeaths)[str_detect(names(dataDeaths), "/")]<-format.Date(jourDate, "%m/%d/%y")
+data_dec<-left_join(data.frame(Pays = countries$NAME%>%as.character(), Pop =countries$POP_EST%>%as.character()%>%as.numeric()),data_dec)
 
-dataCases<-left_join(data.frame(Pays = countries$NAME%>%as.character(), Pop =countries$POP_EST%>%as.character()%>%as.numeric()),dataCases)
+countries2 <- merge(countries,
+                    dataPays(),
+                    by.x = "NAME",
+                    by.y = "Pays",
+                    sort = FALSE)
 
-dataDeaths<-left_join(data.frame(Pays = countries$NAME%>%as.character(), Pop =countries$POP_EST%>%as.character()%>%as.numeric()),dataDeaths)
+countries2 <- merge(countries,
+                   data_cas,
+                    by.x = "nom",
+                    by.y = "maille_code",
+                    sort = FALSE)
+
 
 arrondi<- function(x) 10^(ceiling(log10(x)))
 
-dataDeaths[is.na(dataDeaths)]<- 0
-dataCases[is.na(dataCases)]<- 0
+data_dec[is.na(data_dec)]<- 0
+data_cas[is.na(data_cas)]<- 0
 ui <- bootstrapPage(
   tags$style(type = "text/css", "html, body {width:100%;height:100%}",
              HTML(  ".panel-default {background-color: rgb(256, 256, 256,0.5);
@@ -180,11 +182,11 @@ server <- function(input, output, session) {
   dataPays<- reactive({
     if(!is.null(input$choices)){
       if(input$choices == "Cases"){
-        return( dataCases)
+        return( data_cas)
         
       }else{
         return(
-          dataDeaths)
+          data_dec)
       }}
   })
   
