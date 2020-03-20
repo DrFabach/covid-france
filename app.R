@@ -1,5 +1,14 @@
 #Test1
 
+install.packages('shiny')
+install.packages('leaflet')
+install.packages('RColorBrewer')
+install.packages('rgdal')
+install.packages('RCurl')
+install.packages('plotly')
+install.packages('viridis')
+install.packages('tidyverse')
+
 library(shiny)
 library(leaflet)
 library(RColorBrewer)
@@ -8,9 +17,9 @@ library(RCurl)
 library(plotly)
 library(viridis)
 library(tidyverse)
+library(lubridate)
 
 variable <-F
-
 
 URL <- getURL("https://raw.githubusercontent.com/opencovid19-fr/data/master/dist/chiffres-cles.csv")
 data <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
@@ -19,6 +28,58 @@ data<- unique(data)
 data[is.na(data)]<-0
 data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
 
+# Ajout des dates manquantes
+dates<-unique(as.Date(data$date,format="%Y-%m-%d"))
+datemiss<-NULL
+
+# Creer vecteurs de toutes les dates
+for(i in 1:(length(dates)-1)){
+  jour<-day(dates[i])
+  mois<-month(dates[i])
+  diff<-as.numeric(difftime(dates[i+1],dates[i],units="days"))
+  if(diff>1){
+    for(j in 1:(diff-1)){
+      if(mois==1&jour==31){mois<-2;jour<-0}
+      jour<-jour+1
+      jd<-as.character(jour)
+      md<-as.character(mois)
+      if(nchar(jd)==1){jd<-paste("0",jd,sep="")}
+      if(nchar(md)==1){md<-paste("0",md,sep="")}
+      dat<-paste("2020-",md,"-",jd,sep="")
+      datemiss<-c(datemiss,dat)
+    }
+  }
+}
+
+# Fusion des nouvelles dates
+n<-length(datemiss)
+comp<-data.frame(datemiss,rep(NA,n),rep(NA,n),rep(NA,n))
+names(comp)<-names(data)
+data<-merge.data.frame(data,comp,all=TRUE)
+
+# Separe en deux bases
+data_cas<-data[,c("date","maille_code","cas_confirmes")]
+data_dec<-data[,c("date","maille_code","deces")]
+
+# Mise au bon format
+data_cas<-pivot_wider(data_cas, id_cols = "maille_code",names_from = "date",values_from = "cas_confirmes")
+data_dec<-pivot_wider(data_dec, id_cols = "maille_code",names_from = "date",values_from = "deces")
+
+# Remplace les NA par donnee prec
+for(i in 1:nrow(data_cas)){
+  for(j in 3:ncol(data_cas)){
+    if(is.na(data_cas[i,j])){
+    data_cas[i,j]<-data_cas[i,j-1]
+    }
+    if(is.na(data_dec[i,j])){
+    data_dec[i,j]<-data_dec[i,j-1]
+    }
+  }
+}
+
+# Remplace par 0 si pas de prec
+data_cas[is.na(data_cas)]<-0
+data_dec[is.na(data_dec)]<-0
 
 
 # names(data)
