@@ -79,7 +79,7 @@ data<- data %>%group_by(maille_code)%>%
   mutate(cumsumdeath = cumsum(deces)) 
 
 # names(data)
-# url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
+url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-france"
 # 
 
 # https://www.data.gouv.fr/fr/datasets/contours-des-departements-francais-issus-d-openstreetmap/
@@ -153,32 +153,31 @@ ui <- bootstrapPage(
                       icon = icon("twitter"),
                       onclick = sprintf("window.open('%s')",url))),
   column(2,br(),
-         checkboxInput("plotEvolT", "Show Evolution",F)
+         checkboxInput("plotEvolT", "Afficher évolution",F)
   ),
   column(2, br(),checkboxInput("credits", "Credits", FALSE)),  
  
   
   
   absolutePanel(id = "input_date_control",class = "panel panel-default",bottom = 60, left = 10, draggable = F,
-                selectInput("choices", "Cases or Deaths ?", choices = c("Cases","Deaths"),selected = "Cases"),
+                selectInput("choices", "Nombre de cas ou de décès ?", choices = c("Cas","Décès"),selected = "Cas"),
                 uiOutput("Slider"),
-                helpText("The detail of each country can be obtained by clicking on it."), 
+                helpText("Le detail de chaque département peut être obtenu en cliquant dessus"), 
                 uiOutput("selection"),
-                checkboxInput("legend", "Show legend", TRUE)
+                checkboxInput("legend", "Afficher la légende", TRUE)
                 
   ),
   uiOutput("Credits"),
   uiOutput("plotEvol"),
-  absolutePanel(id = "name",class = "panel panel-title",top  = 10, left  = 100, HTML("<h1>COVID-19 outbreak</h1>"),draggable = T),
-  absolutePanel(id = "mobile",class = "panel panel-mobile",top  = 10, right  = 10, HTML("<a href='https://thibautfabacher.shinyapps.io/covid-19-m/'>Mobile Version</a>"))
-)
+  uiOutput("mobile"),
+  absolutePanel(id = "name",class = "panel panel-title",top  = 10, left  = 100, HTML("<h1>Epidémie COVID-19</h1>"),draggable = T))
 
 server <- function(input, output, session) {
   
   
   datamaille_code<- reactive({
     if(!is.null(input$choices)){
-      if(input$choices == "Cases"){
+      if(input$choices == "Cas"){
         return( data_cas)
         
       }else{
@@ -220,7 +219,7 @@ server <- function(input, output, session) {
   pal2 <- reactive(colorNumeric(c("#FFFFFFFF" ,rev(inferno(256))), domain = c(0,log(arrondi(maxTotalPrevalence())))))
   
   observe({
-    casesDeath<- ifelse(input$choices == "Cases","Cases","Deaths")
+    casesDeath<- ifelse(input$choices == "Cas","Cas","Décès")
     if (!is.null(input$day1)) {
       indicator<-format.Date(input$day1, "%m/%d/%y")
       
@@ -241,7 +240,7 @@ server <- function(input, output, session) {
     }else{
       variable<- input$variable
       
-      if(variable =="Total cases/population"){
+      if(variable =="Nombre total de cas/population"){
         # nCases
         countries2 <- merge(countries,
                             datamaille_code(),
@@ -251,7 +250,7 @@ server <- function(input, output, session) {
         country_popup <- paste0("<strong>Country: </strong>",
                                 countries2$nom,
                                 "<br><strong>",
-                                "Total cases/population :",
+                                "Nombre total de cas/population :",
                                 
                                 
                                 " </strong>",
@@ -266,7 +265,7 @@ server <- function(input, output, session) {
                       weight = 1,
                       popup = country_popup)
         
-      }else if(variable =="Total cases"){
+      }else if(variable =="Nombre total de cas"){
         countries2 <- merge(countries,
                             datamaille_code(),
                             by.x = "code_insee",
@@ -291,7 +290,7 @@ server <- function(input, output, session) {
                       popup = country_popup)
         
         
-      }else if(variable =="New cases over period"){
+      }else if(variable =="Nouveaux cas par période"){
         
         datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
         if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
@@ -390,7 +389,7 @@ server <- function(input, output, session) {
       # enabled, create a new one.
       proxy %>% clearControls()
       if (input$legend) {
-        if(variable %in% c("Total cases/population","New cases over period/population")){
+        if(variable %in% c("Nombre total de cas/population","Nouveaux cas par période/population")){
           proxy %>% addLegend(position = "bottomright",
                               pal = pal2(),opacity = 1,
                               bins = log(10^(seq(0,log10(arrondi(maxTotalPrevalence())),0.5))),
@@ -423,13 +422,13 @@ server <- function(input, output, session) {
     if(is.null(input$variable)){
       
     }else{
-      if(input$variable %in% c("Total cases", "Total cases/population")){
-        sliderInput("day1", "Day", dateMin, max(jourDate),
+      if(input$variable %in% c("Nombre total de cas", "Nombre total de cas/population")){
+        sliderInput("day1", "Jour", dateMin, max(jourDate),
                     value =  c(max(jourDate)),animate = T, step = 1
                     
                     #dateMin,
         )}else{
-          sliderInput("day2", "Day", dateMin, max(jourDate),
+          sliderInput("day2", "Jour", dateMin, max(jourDate),
                       value =  c(max(jourDate)-7,max(jourDate)),animate = T, step = 1
                       
                       #dateMin,
@@ -440,16 +439,16 @@ server <- function(input, output, session) {
   })
   
   output$selection <- renderUI({
-    if(input$choices =="Cases"){
-      radioButtons("variable", choices =  c("New cases over period",
-                                            "New cases over period/population","Total cases", 'Total cases/population' ),
-                   label = "Indicator")
+    if(input$choices =="Cas"){
+      radioButtons("variable", choices =  c("Nouveaux cas par période",
+                                            "Nouveaux cas par période/population","Nombre total de cas", 'Nombre total de cas/population' ),
+                   label = "Indicateur")
     }else{
-      radioButtons("variable", choices =  list("Deaths over period"="New cases over period",
-                                               "Deaths over period/population"="New cases over period/population",
-                                               "Total deaths"="Total cases",
-                                               'Total deaths/population'='Total cases/population' ),
-                   label = "Indicator")
+      radioButtons("variable", choices =  list("Deaths over period"="Nouveaux cas par période",
+                                               "Deaths over period/population"="Nouveaux cas par période/population",
+                                               "Total deaths"="Nombre total de cas",
+                                               'Total deaths/population'='Nombre total de cas/population' ),
+                   label = "Indicateur")
       
       
     }
@@ -471,21 +470,21 @@ server <- function(input, output, session) {
   
   output$evol <-renderPlotly({
     
-    if(input$variable %in% c("Total cases/population","Total cases")){
+    if(input$variable %in% c("Nombre total de cas/population","Nombre total de cas")){
       df_evo<- datamaille_code()%>%filter(maille_code%in% trace$data)%>%pivot_longer(cols = -c(maille_code,Pop),
-                                                                       values_to = "Cases",names_to = "Date")%>%
+                                                                       values_to = "Cas",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
-      if(input$variable=="Total cases/population"){
+      if(input$variable=="Nombre total de cas/population"){
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases/Pop*100000, color = ~maille_code, type = "scatter",mode = "lines")%>%
+        plot_ly(data = df_evo,x = ~Date, y = ~Cas/Pop*100000, color = ~maille_code, type = "scatter",mode = "lines")%>%
           layout(yaxis = list( title = paste(input$choices,"/ 100 000")))
         
       }else{
         
         
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases, color = ~maille_code, type = "scatter",mode = "lines")%>%
+        plot_ly(data = df_evo,x = ~Date, y = ~Cas, color = ~maille_code, type = "scatter",mode = "lines")%>%
           layout(yaxis = list( title = input$choices))
         
       }
@@ -498,20 +497,20 @@ server <- function(input, output, session) {
       
       
       df_evo<- df_evo%>%pivot_longer(cols = -c(maille_code,Pop),
-                                     values_to = "Cases",names_to = "Date")%>%
+                                     values_to = "Cas",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
       
       
-      if( input$variable=="New cases over period/population"){
+      if( input$variable=="Nouveaux cas par période/population"){
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases/Pop*100000, color = ~maille_code, type = "scatter",mode = "lines")%>%
-          layout(yaxis = list( title = paste(input$choices,"/ 100 000/day")))
+        plot_ly(data = df_evo,x = ~Date, y = ~Cas/Pop*100000, color = ~maille_code, type = "scatter",mode = "lines")%>%
+          layout(yaxis = list( title = paste(input$choices,"/ 100 000/jour")))
         
       }else{
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases, color = ~maille_code, type = "scatter",mode = "lines")%>%
-          layout(yaxis = list( title = paste(input$choices,"/day")))
+        plot_ly(data = df_evo,x = ~Date, y = ~Cas, color = ~maille_code, type = "scatter",mode = "lines")%>%
+          layout(yaxis = list( title = paste(input$choices,"/jour")))
         
       }
       
@@ -536,17 +535,17 @@ server <- function(input, output, session) {
     }
     
     
-    if(input$variable %in% c("Total cases/population","Total cases")){
+    if(input$variable %in% c("Nombre total de cas/population","Nombre total de cas")){
       
       
       
       
       df_evo<- datamaille_code()%>%filter(maille_code%in% Top5())%>%pivot_longer(cols = -c(maille_code,Pop),
-                                                                   values_to = "Cases",names_to = "Date")%>%
+                                                                   values_to = "Cas",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
       
-      if(input$variable=="Total cases/population"){
+      if(input$variable=="Nombre total de cas/population"){
         
         for (i in Top5()){
           df_evoi<- df_evo%>%filter(maille_code == i)
@@ -583,10 +582,10 @@ server <- function(input, output, session) {
       
       
       df_evo<-df_evo%>%pivot_longer(cols = -c(maille_code,Pop),
-                                    values_to = "Cases",names_to = "Date")%>%
+                                    values_to = "Cas",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
-      if( input$variable=="New cases over period/population"){
+      if( input$variable=="Nouveaux cas par période/population"){
         
         for (i in Top5()){
           df_evoi<- df_evo%>%filter(maille_code == i)
@@ -636,12 +635,12 @@ server <- function(input, output, session) {
       
       trace$data<-c(trace$data,country_Click)
       
-      if(input$variable %in% c("Total cases/population","Total cases")){
+      if(input$variable %in% c("Nombre total de cas/population","Nombre total de cas")){
         df_click<- datamaille_code()%>%filter(maille_code%in% country_Click)%>%pivot_longer(cols = -c(maille_code,Pop),
-                                                                              values_to = "Cases",names_to = "Date")%>%
+                                                                              values_to = "Cas",names_to = "Date")%>%
           mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
         
-        if(input$variable=="Total cases/population"){
+        if(input$variable=="Nombre total de cas/population"){
           plotlyProxy("evol", session) %>%
             plotlyProxyInvoke("addTraces",
                               list(x =df_click$Date ,
@@ -671,12 +670,12 @@ server <- function(input, output, session) {
         
         
         df_click<- df_click%>%pivot_longer(cols = -c(maille_code,Pop),
-                                           values_to = "Cases",names_to = "Date")%>%
+                                           values_to = "Cas",names_to = "Date")%>%
           mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
         
         
         
-        if( input$variable=="New cases over period/population"){
+        if( input$variable=="Nouveaux cas par période/population"){
           plotlyProxy("evol", session) %>%
             plotlyProxyInvoke("addTraces",
                               list(x =df_click$Date ,
@@ -701,6 +700,18 @@ server <- function(input, output, session) {
       
       }
   })
+  
+  output$mobile <- renderUI({
+    
+    if(input$plotEvolT){
+      
+    }else{
+      
+      absolutePanel(id = "mobile",class = "panel panel-mobile",top  = 10, right  = 10, HTML("<a href='https://thibautfabacher.shinyapps.io/covid-19-m/'>Mobile Version</a>"))
+      
+    }
+    
+  })
   output$Credits <- renderUI({
     if (input$credits) {
       tagList(
@@ -711,11 +722,10 @@ server <- function(input, output, session) {
           left  = "45%",
           HTML(
             "<h1> Data Source : </h1>
-<p> <li><a href='https://coronavirus.jhu.edu/map.html'>Coronavirus COVID-19 Global Cases map Johns Hopkins University</a></li>
-  <li>COVID-19 Cases : <a href='https://github.com/CSSEGISandData/COVID-19' target='_blank'>Github Johns Hopkins University</a></li>
-  <li>World population : <a href='https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population' target='_blank'>Wikipedia</a></li>
-  <li>Shapefile : <a href='https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/' target='_blank'>Natural Earth Data</a></li>
- <li> <a href ='https://github.com/DrFabach/Corona' target='_blank'>Code on Github </a></li>
+<p><li>Source des données : <a href='https://github.com/opencovid19-fr/data' target='_blank'>https://github.com/opencovid19-fr/data</a></li>
+  <li>Population par département : <a href='https://www.insee.fr/fr/statistiques/1893198' target='_blank'>Insee</a></li>
+  <li>Shapefile : <a href='https://www.data.gouv.fr/fr/datasets/contours-des-departements-francais-issus-d-openstreetmap/' target='_blank'>Data.gouv</a></li>
+ <li> <a href ='https://github.com/DrFabach/covid-france' target='_blank'>Code on Github </a></li>
  <li> <a href = 'https://www.r-project.org/'  target='_blank'>The R Project for Statistical Computing</a></li>
   <li> <a href = 'https://shiny.rstudio.com/' target='_blank'>Shiny R package</a></li>
    <li> <a href = 'https://leafletjs.com/' target='_blank'>Leaflet </a></li>
