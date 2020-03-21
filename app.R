@@ -15,7 +15,7 @@ library(lubridate)
 variable <-F
 
 URL <- getURL("https://raw.githubusercontent.com/opencovid19-fr/data/master/dist/chiffres-cles.csv")
-data <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
+data <- read.csv(text = URL, check.names = F,stringsAsFactors = F,)
 data<- data%>%filter(granularite == "departement")%>%select(- source_nom,-source_url,-granularite)
 data<- unique(data)
 data[is.na(data)]<-0
@@ -96,7 +96,10 @@ load("shapeFile.RData")
 
 
 
-population<- read.csv2("pop.csv",stringsAsFactors = F)
+#population<- read.csv2("pop.csv",stringsAsFactors = F)
+# save(population, file="pop.RData")
+load("pop.RData")
+
 population$maille_code<-gsub("DEP-","",population$maille_code)
 population$population<-gsub("\\s","",population$population)
 population$Pop<- as.numeric(population$population)
@@ -707,7 +710,7 @@ server <- function(input, output, session) {
       
     }else{
       
-      absolutePanel(id = "mobile",class = "panel panel-mobile",top  = 10, right  = 10, HTML("<a href='https://thibautfabacher.shinyapps.io/covid-19-m/'>Mobile Version</a>"))
+      #absolutePanel(id = "mobile",class = "panel panel-mobile",top  = 10, right  = 10, HTML("<a href='https://thibautfabacher.shinyapps.io/covid-19-m/'>Mobile Version</a>"))
       
     }
     
