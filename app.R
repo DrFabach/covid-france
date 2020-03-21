@@ -19,8 +19,6 @@ data <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
 data<- data%>%filter(granularite == "departement")%>%select(- source_nom,-source_url,-granularite)
 data<- unique(data)
 data[is.na(data)]<-0
-<<<<<<< HEAD
-=======
 data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
 data$maille_code<-gsub("DEP-","",data$maille_code)
 # Ajout des dates manquantes
@@ -51,7 +49,6 @@ n<-length(datemiss)
 comp<-data.frame(datemiss,rep(NA,n),rep(NA,n),rep(NA,n))
 names(comp)<-names(data)
 data<-merge.data.frame(data,comp,all=TRUE)
->>>>>>> 2814bdb292347731a96842f96ec0fb1e0d8203a0
 
 # Separe en deux bases
 data_cas<-data[,c("date","maille_code","cas_confirmes")]
