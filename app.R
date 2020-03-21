@@ -1,3 +1,7 @@
+#Test1
+
+
+
 library(shiny)
 library(leaflet)
 library(RColorBrewer)
@@ -6,16 +10,70 @@ library(RCurl)
 library(plotly)
 library(viridis)
 library(tidyverse)
+library(lubridate)
 
 variable <-F
-
 
 URL <- getURL("https://raw.githubusercontent.com/opencovid19-fr/data/master/dist/chiffres-cles.csv")
 data <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
 data<- data%>%filter(granularite == "departement")%>%select(- source_nom,-source_url,-granularite)
 data<- unique(data)
 data[is.na(data)]<-0
+<<<<<<< HEAD
+=======
+data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
+data$maille_code<-gsub("DEP-","",data$maille_code)
+# Ajout des dates manquantes
+dates<-unique(as.Date(data$date,format="%Y-%m-%d"))
+datemiss<-NULL
 
+# Creer vecteurs de toutes les dates
+for(i in 1:(length(dates)-1)){
+  jour<-day(dates[i])
+  mois<-month(dates[i])
+  diff<-as.numeric(difftime(dates[i+1],dates[i],units="days"))
+  if(diff>1){
+    for(j in 1:(diff-1)){
+      if(mois==1&jour==31){mois<-2;jour<-0}
+      jour<-jour+1
+      jd<-as.character(jour)
+      md<-as.character(mois)
+      if(nchar(jd)==1){jd<-paste("0",jd,sep="")}
+      if(nchar(md)==1){md<-paste("0",md,sep="")}
+      dat<-paste("2020-",md,"-",jd,sep="")
+      datemiss<-c(datemiss,dat)
+    }
+  }
+}
+
+# Fusion des nouvelles dates
+n<-length(datemiss)
+comp<-data.frame(datemiss,rep(NA,n),rep(NA,n),rep(NA,n))
+names(comp)<-names(data)
+data<-merge.data.frame(data,comp,all=TRUE)
+>>>>>>> 2814bdb292347731a96842f96ec0fb1e0d8203a0
+
+# Separe en deux bases
+data_cas<-data[,c("date","maille_code","cas_confirmes")]
+data_dec<-data[,c("date","maille_code","deces")]
+
+# Mise au bon format
+data_cas<-pivot_wider(data_cas, id_cols = "maille_code",names_from = "date",values_from = "cas_confirmes")
+data_dec<-pivot_wider(data_dec, id_cols = "maille_code",names_from = "date",values_from = "deces")
+
+# Remplace les NA par donnee prec ou 0
+for(i in 1:nrow(data_cas)){
+  for(j in 2:ncol(data_cas)){
+    if(is.na(data_cas[i,j])){
+      data_cas[i,j]<-0
+    }
+    if(is.na(data_dec[i,j])){
+      data_dec[i,j]<-0
+    }
+    data_cas[i,j]<-max(data_cas[i,2:j],na.rm=TRUE)
+    data_dec[i,j]<-max(data_dec[i,2:j],na.rm=TRUE)
+  }
+}
 
 data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
 data$date<- as.Date(data$date, "%Y-%m-%d")
@@ -24,15 +82,15 @@ data<- data %>%group_by(maille_code)%>%
   mutate(cumsumdeath = cumsum(deces)) 
 
 # names(data)
-url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
+# url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
 # 
 
-# https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/
+# https://www.data.gouv.fr/fr/datasets/contours-des-departements-francais-issus-d-openstreetmap/
 
-# countries <- readOGR(dsn ="ne_50m_admin_0_countries", 
-#                      layer = "ne_50m_admin_0_countries", 
-#                      encoding = "utf-8",use_iconv = T,
-#                      verbose = FALSE)
+#countries <- readOGR(dsn ="departements-20140306-5m-shp",
+                     # encoding = "utf-8",use_iconv = T,
+                     # verbose = FALSE)
+
 
 # save(countries, file="shapeFile.RData")
 load("shapeFile.RData")
@@ -42,30 +100,33 @@ load("shapeFile.RData")
 
 
 population<- read.csv2("pop.csv",stringsAsFactors = F)
+population$maille_code<-gsub("DEP-","",population$maille_code)
+population$population<-gsub("\\s","",population$population)
+population$Pop<- as.numeric(population$population)
 
-population$pays<-as.character(unique(countries$NAME)[charmatch(population$Country,unique(countries$NAME))])
+population$population<- NULL
+
+datamaille_code<-function(data=data_cas) return(data)
+jour<-names(data_cas%>%select(contains( "-")))
+jourDate<- as.Date(jour)
+names(data_cas)[str_detect(names(data_cas), "-")]<-format.Date(jourDate, "%m/%d/%y")
+names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
 
-URL <- getURL("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv")
-data <- read.csv(text = URL, check.names = F)
-dataDeaths<- dataCook(data, pop, countries)
+dateMin<- as.Date("2020-02-24")
+
+countries$code_insee
+data_cas<-left_join(population,data_cas)
+
+data_dec<-left_join(population,data_dec)
 
 
 
-dataPays<-function(data=dataCases) return(data)
-jour<-names(dataCases%>%select(contains( "/")))
-jourDate<- as.Date(jour, "%m/%d/%y")
-names(dataCases)[str_detect(names(dataCases), "/")]<-format.Date(jourDate, "%m/%d/%y")
-names(dataDeaths)[str_detect(names(dataDeaths), "/")]<-format.Date(jourDate, "%m/%d/%y")
-
-dataCases<-left_join(data.frame(Pays = countries$NAME%>%as.character(), Pop =countries$POP_EST%>%as.character()%>%as.numeric()),dataCases)
-
-dataDeaths<-left_join(data.frame(Pays = countries$NAME%>%as.character(), Pop =countries$POP_EST%>%as.character()%>%as.numeric()),dataDeaths)
 
 arrondi<- function(x) 10^(ceiling(log10(x)))
 
-dataDeaths[is.na(dataDeaths)]<- 0
-dataCases[is.na(dataCases)]<- 0
+data_dec[is.na(data_dec)]<- 0
+data_cas[is.na(data_cas)]<- 0
 ui <- bootstrapPage(
   tags$style(type = "text/css", "html, body {width:100%;height:100%}",
              HTML(  ".panel-default {background-color: rgb(256, 256, 256,0.5);
@@ -118,24 +179,24 @@ ui <- bootstrapPage(
 server <- function(input, output, session) {
   
   
-  dataPays<- reactive({
+  datamaille_code<- reactive({
     if(!is.null(input$choices)){
       if(input$choices == "Cases"){
-        return( dataCases)
+        return( data_cas)
         
       }else{
         return(
-          dataDeaths)
+          data_dec)
       }}
   })
   
-  maxTotal<- reactive( max(dataPays()%>%select(-Pop)%>%select_if(is.numeric), na.rm = T)
+  maxTotal<- reactive( max(datamaille_code()%>%select(-Pop)%>%select_if(is.numeric), na.rm = T)
   )
-  maxTotalPrevalence<- reactive(max(dataPays()%>%select(-Pop)%>%select_if(is.numeric)%>%mutate_all(function(x) x/dataPays()$Pop*100000), na.rm = T)
+  maxTotalPrevalence<- reactive(max(datamaille_code()%>%select(-Pop)%>%select_if(is.numeric)%>%mutate_all(function(x) x/datamaille_code()$Pop*100000), na.rm = T)
   )
   # 
   # 
-  Top5<-reactive( unique(c(dataPays()$Pays[order(dataPays()[,dim(dataPays())[2]]%>%unlist(),decreasing = T)][1:5]
+  Top5<-reactive( unique(c(datamaille_code()$maille_code[order(datamaille_code()[,dim(datamaille_code())[2]]%>%unlist(),decreasing = T)][1:5]
   ,"France")))
   # 
   
@@ -151,7 +212,7 @@ server <- function(input, output, session) {
     
     leaflet(data = countries) %>%
       
-      setView(0, 30, zoom = 3)
+      setView(-0.5, 47, zoom = 6)
     
     
   })
@@ -175,7 +236,7 @@ server <- function(input, output, session) {
       indicator2<-format.Date(input$day2-c(1,0), "%m/%d/%y")
       
     }else{
-      indicator2 =format.Date(c(min(jourDate)-1,max(jourDate)), "%m/%d/%y")
+      indicator2 =format.Date(c(dateMin-1,max(jourDate)), "%m/%d/%y")
     }
     
     if(is.null(input$variable)){
@@ -186,12 +247,12 @@ server <- function(input, output, session) {
       if(variable =="Total cases/population"){
         # nCases
         countries2 <- merge(countries,
-                            dataPays(),
-                            by.x = "NAME",
-                            by.y = "Pays",
+                            datamaille_code(),
+                            by.x = "code_insee",
+                            by.y = "maille_code",
                             sort = FALSE)
         country_popup <- paste0("<strong>Country: </strong>",
-                                countries2$NAME,
+                                countries2$nom,
                                 "<br><strong>",
                                 "Total cases/population :",
                                 
@@ -202,7 +263,7 @@ server <- function(input, output, session) {
         
         leafletProxy("map", data = countries2)%>%
           addPolygons(fillColor = pal2()(log((countries2[[indicator]]/countries2$Pop*100000)+1)),
-                      layerId = ~NAME,
+                      layerId = ~code_insee,
                       fillOpacity = 1,
                       color = "#BDBDC3",
                       weight = 1,
@@ -210,12 +271,12 @@ server <- function(input, output, session) {
         
       }else if(variable =="Total cases"){
         countries2 <- merge(countries,
-                            dataPays(),
-                            by.x = "NAME",
-                            by.y = "Pays",
+                            datamaille_code(),
+                            by.x = "code_insee",
+                            by.y = "maille_code",
                             sort = FALSE)
         country_popup <- paste0("<strong>Country: </strong>",
-                                countries2$NAME,
+                                countries2$nom,
                                 "<br><strong>",
                                 "Total ",casesDeath," :",
                                 
@@ -227,7 +288,7 @@ server <- function(input, output, session) {
         leafletProxy("map", data = countries2)%>%
           addPolygons(fillColor = pal()(log((countries2[[indicator]])+1)),
                       fillOpacity = 1,
-                      layerId = ~NAME,
+                      layerId = ~code_insee,
                       color = "#BDBDC3",
                       weight = 1,
                       popup = country_popup)
@@ -235,23 +296,23 @@ server <- function(input, output, session) {
         
       }else if(variable =="New cases over period"){
         
-        dataPaysSel<-dataPays()%>%select(Pays, Pop)
-        if(indicator2[1] == format.Date(min(jourDate)-1, "%m/%d/%y")){
+        datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
+        if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
           
-          dataPaysSel$ncases<-dataPays()[,indicator2[2]]
+          datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]
         }else{
-          dataPaysSel$ncases<-dataPays()[,indicator2[2]]-dataPays()[,indicator2[1]]
+          datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]-datamaille_code()[,indicator2[1]]
           
         }
         
         # nCases
         countries2 <- merge(countries,
-                            dataPaysSel,
-                            by.x = "NAME",
-                            by.y = "Pays",
+                            datamaille_codeSel,
+                            by.x = "code_insee",
+                            by.y = "maille_code",
                             sort = FALSE)
         country_popup <- paste0("<strong>Country: </strong>",
-                                countries2$NAME,
+                                countries2$nom,
                                 "<br><strong>",
                                 "New ",casesDeath," over period :",
                                 
@@ -263,28 +324,28 @@ server <- function(input, output, session) {
           addPolygons(fillColor = pal()(log(countries2$ncases+1)),
                       fillOpacity = 1,
                       color = "#BDBDC3",
-                      layerId = ~NAME,
+                      layerId = ~code_insee,
                       weight = 1,
                       popup = country_popup)
       }else{
         
-        dataPaysSel<-dataPays()%>%select(Pays, Pop)
-        if(indicator2[1] == format.Date(min(jourDate)-1, "%m/%d/%y")){
+        datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
+        if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
           
-          dataPaysSel$ncases<-dataPays()[,indicator2[2]]
+          datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]
         }else{
-          dataPaysSel$ncases<-dataPays()[,indicator2[2]]-dataPays()[,indicator2[1]]
+          datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]-datamaille_code()[,indicator2[1]]
           
         }
         
         # nCases
         countries2 <- merge(countries,
-                            dataPaysSel,
-                            by.x = "NAME",
-                            by.y = "Pays",
+                            datamaille_codeSel,
+                            by.x = "code_insee",
+                            by.y = "maille_code",
                             sort = FALSE)
         country_popup <- paste0("<strong>Country: </strong>",
-                                countries2$NAME,
+                                countries2$nom,
                                 "<br><strong>",
                                 "New ",casesDeath," over period / population :",
                                 
@@ -296,7 +357,7 @@ server <- function(input, output, session) {
           addPolygons(fillColor = pal2()(log(countries2$ncases/countries2$Pop*100000+1)),
                       fillOpacity = 1,
                       color = "#BDBDC3",
-                      layerId = ~NAME,
+                      layerId = ~code_insee,
                       weight = 1,
                       popup = country_popup)
         
@@ -366,15 +427,15 @@ server <- function(input, output, session) {
       
     }else{
       if(input$variable %in% c("Total cases", "Total cases/population")){
-        sliderInput("day1", "Day", min(jourDate), max(jourDate),
+        sliderInput("day1", "Day", dateMin, max(jourDate),
                     value =  c(max(jourDate)),animate = T, step = 1
                     
-                    #min(jourDate),
+                    #dateMin,
         )}else{
-          sliderInput("day2", "Day", min(jourDate), max(jourDate),
+          sliderInput("day2", "Day", dateMin, max(jourDate),
                       value =  c(max(jourDate)-7,max(jourDate)),animate = T, step = 1
                       
-                      #min(jourDate),
+                      #dateMin,
           )
           
         }
@@ -414,32 +475,32 @@ server <- function(input, output, session) {
   output$evol <-renderPlotly({
     
     if(input$variable %in% c("Total cases/population","Total cases")){
-      df_evo<- dataPays()%>%filter(Pays%in% trace$data)%>%pivot_longer(cols = -c(Pays,Pop),
+      df_evo<- datamaille_code()%>%filter(maille_code%in% trace$data)%>%pivot_longer(cols = -c(maille_code,Pop),
                                                                        values_to = "Cases",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
       if(input$variable=="Total cases/population"){
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases/Pop*100000, color = ~Pays, type = "scatter",mode = "lines")%>%
+        plot_ly(data = df_evo,x = ~Date, y = ~Cases/Pop*100000, color = ~maille_code, type = "scatter",mode = "lines")%>%
           layout(yaxis = list( title = paste(input$choices,"/ 100 000")))
         
       }else{
         
         
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases, color = ~Pays, type = "scatter",mode = "lines")%>%
+        plot_ly(data = df_evo,x = ~Date, y = ~Cases, color = ~maille_code, type = "scatter",mode = "lines")%>%
           layout(yaxis = list( title = input$choices))
         
       }
     }else{
-      df_evo<- dataPays()%>%filter(Pays%in% trace$data)
+      df_evo<- datamaille_code()%>%filter(maille_code%in% trace$data)
       
       
       
       for(i in dim( df_evo)[2]:4)  df_evo[i]<- df_evo[i]- df_evo[i-1]
       
       
-      df_evo<- df_evo%>%pivot_longer(cols = -c(Pays,Pop),
+      df_evo<- df_evo%>%pivot_longer(cols = -c(maille_code,Pop),
                                      values_to = "Cases",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
@@ -447,12 +508,12 @@ server <- function(input, output, session) {
       
       if( input$variable=="New cases over period/population"){
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases/Pop*100000, color = ~Pays, type = "scatter",mode = "lines")%>%
+        plot_ly(data = df_evo,x = ~Date, y = ~Cases/Pop*100000, color = ~maille_code, type = "scatter",mode = "lines")%>%
           layout(yaxis = list( title = paste(input$choices,"/ 100 000/day")))
         
       }else{
         
-        plot_ly(data = df_evo,x = ~Date, y = ~Cases, color = ~Pays, type = "scatter",mode = "lines")%>%
+        plot_ly(data = df_evo,x = ~Date, y = ~Cases, color = ~maille_code, type = "scatter",mode = "lines")%>%
           layout(yaxis = list( title = paste(input$choices,"/day")))
         
       }
@@ -483,7 +544,7 @@ server <- function(input, output, session) {
       
       
       
-      df_evo<- dataPays()%>%filter(Pays%in% Top5())%>%pivot_longer(cols = -c(Pays,Pop),
+      df_evo<- datamaille_code()%>%filter(maille_code%in% Top5())%>%pivot_longer(cols = -c(maille_code,Pop),
                                                                    values_to = "Cases",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
@@ -491,7 +552,7 @@ server <- function(input, output, session) {
       if(input$variable=="Total cases/population"){
         
         for (i in Top5()){
-          df_evoi<- df_evo%>%filter(Pays == i)
+          df_evoi<- df_evo%>%filter(maille_code == i)
           plotlyProxy("evol", session) %>%
             plotlyProxyInvoke("addTraces",
                               list(x =df_evoi$Date ,
@@ -503,7 +564,7 @@ server <- function(input, output, session) {
         }
       }else{
         for (i in Top5()){
-          df_evoi<- df_evo%>%filter(Pays == i)
+          df_evoi<- df_evo%>%filter(maille_code == i)
           plotlyProxy("evol", session) %>%
             plotlyProxyInvoke("addTraces",
                               list(x =df_evoi$Date ,
@@ -519,19 +580,19 @@ server <- function(input, output, session) {
       
       
       
-      df_evo<- dataPays()%>%filter(Pays%in% Top5())
+      df_evo<- datamaille_code()%>%filter(maille_code%in% Top5())
 
       for(i in  dim(df_evo)[2]:4) df_evo[i]<-df_evo[i]-df_evo[i-1]
       
       
-      df_evo<-df_evo%>%pivot_longer(cols = -c(Pays,Pop),
+      df_evo<-df_evo%>%pivot_longer(cols = -c(maille_code,Pop),
                                     values_to = "Cases",names_to = "Date")%>%
         mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
       
       if( input$variable=="New cases over period/population"){
         
         for (i in Top5()){
-          df_evoi<- df_evo%>%filter(Pays == i)
+          df_evoi<- df_evo%>%filter(maille_code == i)
           plotlyProxy("evol", session) %>%
             plotlyProxyInvoke("addTraces",
                               list(x =df_evoi$Date ,
@@ -544,7 +605,7 @@ server <- function(input, output, session) {
         
       }else{
         for (i in Top5()){
-          df_evoi<- df_evo%>%filter(Pays == i)
+          df_evoi<- df_evo%>%filter(maille_code == i)
           plotlyProxy("evol", session) %>%
             plotlyProxyInvoke("addTraces",
                               list(x =df_evoi$Date ,
@@ -579,7 +640,7 @@ server <- function(input, output, session) {
       trace$data<-c(trace$data,country_Click)
       
       if(input$variable %in% c("Total cases/population","Total cases")){
-        df_click<- dataPays()%>%filter(Pays%in% country_Click)%>%pivot_longer(cols = -c(Pays,Pop),
+        df_click<- datamaille_code()%>%filter(maille_code%in% country_Click)%>%pivot_longer(cols = -c(maille_code,Pop),
                                                                               values_to = "Cases",names_to = "Date")%>%
           mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
         
@@ -604,7 +665,7 @@ server <- function(input, output, session) {
         }
       }else{
         
-        df_click<- dataPays()%>%filter(Pays%in% country_Click)
+        df_click<- datamaille_code()%>%filter(maille_code%in% country_Click)
         
         
         
@@ -612,7 +673,7 @@ server <- function(input, output, session) {
         for(i in  dim( df_click)[2]:4)  df_click[i]<- df_click[i]- df_click[i-1]
         
         
-        df_click<- df_click%>%pivot_longer(cols = -c(Pays,Pop),
+        df_click<- df_click%>%pivot_longer(cols = -c(maille_code,Pop),
                                            values_to = "Cases",names_to = "Date")%>%
           mutate(Date= lubridate::parse_date_time(Date, orders = c("mdy")))
         
