@@ -14,66 +14,26 @@ library(lubridate)
 
 variable <-F
 
-URL <- getURL("https://raw.githubusercontent.com/opencovid19-fr/data/master/dist/chiffres-cles.csv")
-data <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
-data<- data%>%filter(granularite == "departement")%>%select(- source_nom,-source_url,-granularite)
+URL <- getURL("https://www.data.gouv.fr/fr/datasets/r/b94ba7af-c0d6-4055-a883-61160e412115")
+URL<-URL%>%paste(collapse = "")%>%stringr::str_extract("href=.*?csv")%>%gsub("href=\"","",.)
+URL<-getURL(URL)
+
+data <- read.csv2(text = URL, check.names = F,stringsAsFactors = F)
+data<-data%>%filter(sexe == 0)%>%select(-sexe)
 data<- unique(data)
-data[is.na(data)]<-0
-data<- data%>%group_by(date, maille_code)%>%summarise(cas_confirmes = max(cas_confirmes), deces = max(deces))
-data$maille_code<-gsub("DEP-","",data$maille_code)
 # Ajout des dates manquantes
-dates<-unique(as.Date(data$date,format="%Y-%m-%d"))
-datemiss<-NULL
+dates<-unique(as.Date(data$jour,format="%Y-%m-%d"))
+data_cas<-data%>%select(dep,jour,hosp)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = hosp)
+data_dec<-data%>%select(dep,jour,dc)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = dc)
+data_rea<-data%>%select(dep,jour,rea)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = rea)
 
-# Creer vecteurs de toutes les dates
-for(i in 1:(length(dates)-1)){
-  jour<-day(dates[i])
-  mois<-month(dates[i])
-  diff<-as.numeric(difftime(dates[i+1],dates[i],units="days"))
-  if(diff>1){
-    for(j in 1:(diff-1)){
-      if(mois==1&jour==31){mois<-2;jour<-0}
-      jour<-jour+1
-      jd<-as.character(jour)
-      md<-as.character(mois)
-      if(nchar(jd)==1){jd<-paste("0",jd,sep="")}
-      if(nchar(md)==1){md<-paste("0",md,sep="")}
-      dat<-paste("2020-",md,"-",jd,sep="")
-      datemiss<-c(datemiss,dat)
-    }
-  }
-}
 
-# Fusion des nouvelles dates
-n<-length(datemiss)
-comp<-data.frame(datemiss,rep(NA,n),rep(NA,n),rep(NA,n))
-names(comp)<-names(data)
-data<-merge.data.frame(data,comp,all=TRUE)
 
-# Separe en deux bases
-data_cas<-data[,c("date","maille_code","cas_confirmes")]
-data_dec<-data[,c("date","maille_code","deces")]
 
-# Mise au bon format
-data_cas<-pivot_wider(data_cas, id_cols = "maille_code",names_from = "date",values_from = "cas_confirmes")
-data_dec<-pivot_wider(data_dec, id_cols = "maille_code",names_from = "date",values_from = "deces")
-
-# Remplace les NA par donnee prec
-for(i in 1:nrow(data_cas)){
-  for(j in 3:ncol(data_cas)){
-    if(is.na(data_cas[i,j])){
-    data_cas[i,j]<-data_cas[i,j-1]
-    }
-    if(is.na(data_dec[i,j])){
-    data_dec[i,j]<-data_dec[i,j-1]
-    }
-  }
-}
-
-# Remplace par 0 si pas de prec
-data_cas[is.na(data_cas)]<-0
-data_dec[is.na(data_dec)]<-0
-
+data_cas[,2]<-ifelse(is.na(data_cas[,2]),0,data_cas[,2]%>%unlist)
+data_dec[,2]<-ifelse(is.na(data_dec[,2]),0,data_dec[,2]%>%unlist)
+for(i in 3: dim(data_cas)[2]) data_cas[,i]<- ifelse(is.na(data_cas[,i]), data_cas[,i-1]%>%unlist,data_cas[,i]%>%unlist)
+for(i in 3: dim(data_dec)[2]) data_dec[,i]<- ifelse(is.na(data_dec[,i]), data_dec[,i-1]%>%unlist,data_dec[,i]%>%unlist)
 
 # names(data)
 # url <- "https://twitter.com/intent/tweet?url=https://thibautfabacher.shinyapps.io/covid-19"
@@ -104,23 +64,26 @@ datamaille_code<-function(data=data_cas) return(data)
 jour<-names(data_cas%>%select(contains( "-")))
 jourDate<- as.Date(jour)
 names(data_cas)[str_detect(names(data_cas), "-")]<-format.Date(jourDate, "%m/%d/%y")
+
 names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
 
-dateMin<- as.Date("2020-02-24")
+dateMin<- min(jourDate)
 
 countries$code_insee
-data_cas<-left_join(population,data_cas)
+data_cas<-left_join(population,data_cas,
+                    by=c( "maille_code"="dep"))
 
-data_dec<-left_join(population,data_dec)
+data_dec<-left_join(population,data_dec,
+                    
+                    by=c( "maille_code"="dep"))
 
 
 
 
 arrondi<- function(x) 10^(ceiling(log10(x)))
 
-data_dec[is.na(data_dec)]<- 0
-data_cas[is.na(data_cas)]<- 0
+
 ui <- bootstrapPage(
   tags$style(type = "text/css", "html, body {width:100%;height:100%}",
              HTML(  ".panel-default {background-color: rgb(256, 256, 256,0.5);
