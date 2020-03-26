@@ -35,8 +35,11 @@ data_rea<-data%>%select(dep,jour,rea)%>%pivot_wider(id_cols =  dep, names_from =
 
 data_cas[,2]<-ifelse(is.na(data_cas[,2]),0,data_cas[,2]%>%unlist)
 data_dec[,2]<-ifelse(is.na(data_dec[,2]),0,data_dec[,2]%>%unlist)
+data_rea[,2]<-ifelse(is.na(data_rea[,2]),0,data_rea[,2]%>%unlist)
+
 for(i in 3: dim(data_cas)[2]) data_cas[,i]<- ifelse(is.na(data_cas[,i]), data_cas[,i-1]%>%unlist,data_cas[,i]%>%unlist)
 for(i in 3: dim(data_dec)[2]) data_dec[,i]<- ifelse(is.na(data_dec[,i]), data_dec[,i-1]%>%unlist,data_dec[,i]%>%unlist)
+for(i in 3: dim(data_rea)[2]) data_rea[,i]<- ifelse(is.na(data_rea[,i]), data_rea[,i-1]%>%unlist,data_rea[,i]%>%unlist)
 
 
 # names(data)
@@ -61,11 +64,6 @@ load("shapeFile.RData")
 # save(population, file="pop.RData")
 load("pop.RData")
 
-population$maille_code<-gsub("DEP-","",population$maille_code)
-population$population<-gsub("\\s","",population$population)
-population$Pop<- as.numeric(population$population)
-
-population$population<- NULL
 
 datamaille_code<-function(data=data_cas) return(data)
 jour<-names(data_cas%>%select(contains( "-")))
@@ -73,6 +71,7 @@ jourDate<- as.Date(jour)
 names(data_cas)[str_detect(names(data_cas), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
 names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(jourDate, "%m/%d/%y")
+names(data_rea)[str_detect(names(data_rea), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
 
 dateMin<- min(jourDate)
@@ -85,7 +84,9 @@ data_dec<-left_join(population,data_dec,
                     
                     by=c( "maille_code"="dep"))
 
-
+data_rea<-left_join(population,data_rea,
+                    
+                    by=c( "maille_code"="dep"))
 
 
 arrondi<- function(x) 10^(ceiling(log10(x)))
@@ -106,6 +107,7 @@ ui <- bootstrapPage(
               .panel-mobile {background-color: rgb(256, 256, 256,0);
                padding : 15px;
                box-shadow: unset;}
+               .leaflet-container { background: 	#F5F5F5; }
                ")
              
   ),
@@ -127,7 +129,7 @@ ui <- bootstrapPage(
   
   
   absolutePanel(id = "input_date_control",class = "panel panel-default",bottom = 60, left = 10, draggable = F,
-                selectInput("choices", "Nombre de cas ou de décès ?", choices = c("Cas","Décès"),selected = "Cas"),
+                selectInput("choices", "Statistique ?", choices = c("Hospitalisation","Décès", "Cas en réanimation"),selected = "Hospitalisation"),
                 uiOutput("Slider"),
                 helpText("Le detail de chaque département peut être obtenu en cliquant dessus"), 
                 uiOutput("selection"),
@@ -144,13 +146,17 @@ server <- function(input, output, session) {
   
   datamaille_code<- reactive({
     if(!is.null(input$choices)){
-      if(input$choices == "Cas"){
+      if(input$choices == "Hospitalisation"){
         return( data_cas)
         
-      }else{
+      }else if(input$choices == "Décès" ){
         return(
           data_dec)
-      }}
+      }else{
+        
+        return(data_rea)
+      }
+      }
   })
   
   maxTotal<- reactive( max(datamaille_code()%>%select(-Pop)%>%select_if(is.numeric), na.rm = T)
@@ -186,7 +192,7 @@ server <- function(input, output, session) {
   pal2 <- reactive(colorNumeric(c("#FFFFFFFF" ,rev(inferno(256))), domain = c(0,log(arrondi(maxTotalPrevalence())))))
   
   observe({
-    casesDeath<- ifelse(input$choices == "Cas","Cas","Décès")
+    casesDeath<- (input$choices)
     if (!is.null(input$day1)) {
       indicator<-format.Date(input$day1, "%m/%d/%y")
       
@@ -217,7 +223,7 @@ server <- function(input, output, session) {
         country_popup <- paste0("<strong>Country: </strong>",
                                 countries2$nom,
                                 "<br><strong>",
-                                "Nombre total de cas/population :",
+                                "Nombre total d'hospitalisation/population :",
                                 
                                 
                                 " </strong>",
@@ -277,7 +283,7 @@ server <- function(input, output, session) {
         country_popup <- paste0("<strong>Country: </strong>",
                                 countries2$nom,
                                 "<br><strong>",
-                                "New ",casesDeath," over period :",
+                                casesDeath," par période:",
                                 
                                 
                                 " </strong>",
@@ -310,7 +316,7 @@ server <- function(input, output, session) {
         country_popup <- paste0("<strong>Country: </strong>",
                                 countries2$nom,
                                 "<br><strong>",
-                                "New ",casesDeath," over period / population :",
+                                casesDeath," par période / habitants :",
                                 
                                 
                                 " </strong>",
@@ -396,7 +402,7 @@ server <- function(input, output, session) {
                     #dateMin,
         )}else{
           sliderInput("day2", "Jour", dateMin, max(jourDate),
-                      value =  c(max(jourDate)-7,max(jourDate)),animate = T, step = 1
+                      value =  c(max(jourDate)-2,max(jourDate)),animate = T, step = 1
                       
                       #dateMin,
           )
@@ -406,15 +412,25 @@ server <- function(input, output, session) {
   })
   
   output$selection <- renderUI({
-    if(input$choices =="Cas"){
-      radioButtons("variable", choices =  c("Nouveaux cas par période",
-                                            "Nouveaux cas par période/population","Nombre total de cas", 'Nombre total de cas/population' ),
+    if(input$choices =="Hospitalisation"){
+      radioButtons("variable", choices =  c("Hospitalisations par période"="Nouveaux cas par période",
+                                            "Hospitalisations par période /habitants"="Nouveaux cas par période/population",
+                                            "Total hospitalisations"="Nombre total de cas",
+                                            'Total hospitalisation /habitants'='Nombre total de cas/population' ),
                    label = "Indicateur")
+    }else if(input$choices =="Décès"){
+      radioButtons("variable", choices =   c("Décès par période"="Nouveaux cas par période",
+                                             "Décès par période /habitants"="Nouveaux cas par période/population",
+                                             "Total Décès"="Nombre total de cas",
+                                             'Total Décès /habitants'='Nombre total de cas/population' ),
+                   label = "Indicateur")
+      
+      
     }else{
-      radioButtons("variable", choices =  list("Deaths over period"="Nouveaux cas par période",
-                                               "Deaths over period/population"="Nouveaux cas par période/population",
-                                               "Total deaths"="Nombre total de cas",
-                                               'Total deaths/population'='Nombre total de cas/population' ),
+      radioButtons("variable", choices =   c("Hospitalisation en réa par période"="Nouveaux cas par période",
+                                             "Hospitalisation en réa par période /habitants"="Nouveaux cas par période/population",
+                                             "Total Hospitalisation en réa"="Nombre total de cas",
+                                             'Total Hospitalisation en réa /habitants'='Nombre total de cas/population' ),
                    label = "Indicateur")
       
       
@@ -429,8 +445,8 @@ server <- function(input, output, session) {
         top = 10,width = "700px",
         right  = 10,draggable = F,
         plotlyOutput(outputId = "evol",width = "600px"),
-        actionButton("reset", "Reset Graph"),
-        actionButton("clear", "Clear all traces")
+        actionButton("reset", "Reset Graphique"),
+        actionButton("clear", "Effacer toutes les traces")
       ))
     }
   })
@@ -689,7 +705,7 @@ server <- function(input, output, session) {
           left  = "45%",
           HTML(
             "<h1> Data Source : </h1>
-<p><li>Source des données : <a href='https://github.com/opencovid19-fr/data' target='_blank'>https://github.com/opencovid19-fr/data</a></li>
+<p><li>Source des données : <a href='https://www.data.gouv.fr/fr/datasets/donnees-relatives-a-lepidemie-de-covid-19/' target='_blank'>Data.gouv</a></li>
   <li>Population par département : <a href='https://www.insee.fr/fr/statistiques/1893198' target='_blank'>Insee</a></li>
   <li>Shapefile : <a href='https://www.data.gouv.fr/fr/datasets/contours-des-departements-francais-issus-d-openstreetmap/' target='_blank'>Data.gouv</a></li>
  <li> <a href ='https://github.com/DrFabach/covid-france' target='_blank'>Code on Github </a></li>
