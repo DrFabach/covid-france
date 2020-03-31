@@ -456,10 +456,10 @@ server <- function(input, output, session) {
   
   output$selection <- renderUI({
     if(input$choices =="Hospitalisation"){
-      radioButtons("variable", choices =  c("Somme Cumulée Hospitalisations par période"="Nouveaux cas par période",
-                                            "Somme Cumulée Hospitalisations par période /habitants"="Nouveaux cas par période/population",
-                                            "Somme Cumulée Hospitalisations"="Nombre total de cas",
-                                            'Somme Cumulée Hospitalisations /habitants'='Nombre total de cas/population' ),
+      radioButtons("variable", choices =  c("Nombre Cumulé d'Hospitalisations par période"="Nouveaux cas par période",
+                                            "Nombre Cumulé d'Hospitalisations par période /habitants"="Nouveaux cas par période/population",
+                                            "Nombre Cumulé d'Hospitalisations"="Nombre total de cas",
+                                            "Nombre Cumulé d'Hospitalisations /habitants"='Nombre total de cas/population' ),
                    label = "Indicateur")
     }else if(input$choices =="Décès"){
       radioButtons("variable", choices =   c("Décès par période"="Nouveaux cas par période",

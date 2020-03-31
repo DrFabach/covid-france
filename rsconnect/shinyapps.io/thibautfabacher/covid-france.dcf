@@ -5,6 +5,6 @@ account: thibautfabacher
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1974442
-bundleId: 2947751
+bundleId: 2947806
 url: https://thibautfabacher.shinyapps.io/covid-france/
-when: 1585641638.93646
+when: 1585642943.62532
