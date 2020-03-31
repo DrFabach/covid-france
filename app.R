@@ -14,7 +14,15 @@ library(lubridate)
 
 variable <-F
 
-URL <- getURL("https://www.data.gouv.fr/fr/datasets/r/b94ba7af-c0d6-4055-a883-61160e412115")
+URL <- getURL("https://www.data.gouv.fr/fr/datasets/r/eceb9fb4-3ebc-4da3-828d-f5939712600a")
+URL<-URL%>%paste(collapse = "")%>%stringr::str_extract("href=.*?csv")%>%gsub("href=\"","",.)
+URL<-getURL(URL)
+data1 <- read.csv(text = URL, check.names = F,stringsAsFactors = F)
+data1<-data1%>%filter(sursaud_cl_age_corona == 0)%>%select(dep,nbre_hospit_corona, date_de_passage)
+data1$date_de_passage<-as.Date(data1$date_de_passage)
+data1<-data1%>%group_by(dep)%>% mutate(nbre_hospit_corona= cumsum(nbre_hospit_corona))
+
+URL <- getURL("https://www.data.gouv.fr/fr/datasets/r/63352e38-d353-4b54-bfd1-f1b3ee1cabd7")
 URL<-URL%>%paste(collapse = "")%>%stringr::str_extract("href=.*?csv")%>%gsub("href=\"","",.)
 URL<-getURL(URL)
 
@@ -25,7 +33,7 @@ data<-data%>%filter(sexe == 0)%>%select(-sexe)
 data<- unique(data)
 # Ajout des dates manquantes
 dates<-unique(as.Date(data$jour,format="%Y-%m-%d"))
-data_cas<-data%>%select(dep,jour,hosp)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = hosp)
+data_cas<-data1%>%as.data.frame()%>%select(dep,jour = date_de_passage,hosp=nbre_hospit_corona)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = hosp)
 data_dec<-data%>%select(dep,jour,dc)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = dc)
 data_rea<-data%>%select(dep,jour,rea)%>%pivot_wider(id_cols =  dep, names_from = jour, values_from = rea)
 
@@ -68,14 +76,18 @@ load("pop.RData")
 datamaille_code<-function(data=data_cas) return(data)
 jour<-names(data_cas%>%select(contains( "-")))
 jourDate<- as.Date(jour)
+jour2<-names(data_dec%>%select(contains( "-")))
+jourDate2<- as.Date(jour2)
+
 names(data_cas)[str_detect(names(data_cas), "-")]<-format.Date(jourDate, "%m/%d/%y")
 
-names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(jourDate, "%m/%d/%y")
-names(data_rea)[str_detect(names(data_rea), "-")]<-format.Date(jourDate, "%m/%d/%y")
+names(data_dec)[str_detect(names(data_dec), "-")]<-format.Date(names(data_dec%>%select(contains( "-")))%>%as.Date(), "%m/%d/%y")
+names(data_rea)[str_detect(names(data_rea), "-")]<-format.Date(names(data_rea%>%select(contains( "-")))%>%as.Date(), "%m/%d/%y")
 
 
-dateMin<- min(jourDate)
-
+dateMin1<- min(jourDate)
+dateMin<-dateMin1
+dateMin2<- min(jourDate2)
 countries$code_insee
 data_cas<-left_join(population,data_cas,
                     by=c( "maille_code"="dep"))
@@ -129,7 +141,10 @@ ui <- bootstrapPage(
   
   
   absolutePanel(id = "input_date_control",class = "panel panel-default",bottom = 60, left = 10, draggable = F,
-                selectInput("choices", "Statistique ?", choices = c("Hospitalisation","Décès", "Cas en réanimation"),selected = "Hospitalisation"),
+                selectInput("choices", "Statistique ?", choices = c("Hospitalisations Cumulées" = "Hospitalisation",
+                                                                    "Décès Cumulés"= "Décès", "Cas en réanimation"="Cas en réanimation" 
+                                                                    # "Cas Hosbitalisatés"="Cas"
+                                                                    ),selected = "Hospitalisation"),
                 uiOutput("Slider"),
                 helpText("Le detail de chaque département peut être obtenu en cliquant dessus"), 
                 uiOutput("selection"),
@@ -143,7 +158,38 @@ ui <- bootstrapPage(
 
 server <- function(input, output, session) {
   
+  output$Slider<-renderUI({
+    
+    if(is.null(input$variable)){
+      
+    }else{
+      
+
+      
+      if(input$variable %in% c("Nombre total de cas", "Nombre total de cas/population")){
+        sliderInput("day1", "Jour", dateMin(), max(jourDate),
+                    value =  c(max(jourDate)),animate = T, step = 1
+                    
+                   
+        )}else{
+          sliderInput("day2", "Jour", dateMin(), max(jourDate),
+                      value =  c(max(jourDate)-2,max(jourDate)),animate = T, step = 1
+                   
+          )
+          
+        }
+    }
+  })
   
+  dateMin<- reactive({
+  if(input$choices=="Hospitalisation"){
+    
+    dateMin<- dateMin1
+  }else{
+    dateMin<-  dateMin2 
+  }
+    dateMin
+  })
   datamaille_code<- reactive({
     if(!is.null(input$choices)){
       if(input$choices == "Hospitalisation"){
@@ -187,14 +233,21 @@ server <- function(input, output, session) {
   })
   
   
-  pal <- reactive(colorNumeric(c("#FFFFFFFF" ,rev(inferno(256))), domain = c(0,log(arrondi(maxTotal())))))
+  pal <- reactive(colorNumeric(c("#FFFFFFFF" ,rev(inferno(256))), domain = c(0,log(arrondi(maxTotal()))), 
+                               na.color = "#c6ff45"))
   
-  pal2 <- reactive(colorNumeric(c("#FFFFFFFF" ,rev(inferno(256))), domain = c(0,log(arrondi(maxTotalPrevalence())))))
+  pal2 <- reactive(colorNumeric(c("#FFFFFFFF" ,rev(inferno(256))), domain = c(0,log(arrondi(maxTotalPrevalence()))), 
+                                na.color = "#c6ff45"))
   
   observe({
+
     casesDeath<- (input$choices)
     if (!is.null(input$day1)) {
-      indicator<-format.Date(input$day1, "%m/%d/%y")
+      if(input$day1>=dateMin()){
+        indicator<-format.Date(input$day1, "%m/%d/%y")
+      }else{
+        indicator<-format.Date(dateMin(), "%m/%d/%y")
+      }
       
     }else{
       indicator = format.Date(max(jourDate), "%m/%d/%y")
@@ -202,10 +255,20 @@ server <- function(input, output, session) {
     
     
     if (!is.null(input$day2)) {
-      indicator2<-format.Date(input$day2-c(1,0), "%m/%d/%y")
+      indicator2<-input$day2
+      if(indicator2[1]<dateMin()){
+
+        indicator2[1]<-dateMin()+2
+      }
+      if(indicator2[2]<dateMin()){
+        
+        indicator2[2]<-dateMin()
+      }
+      indicator2<-format.Date(indicator2, "%m/%d/%y")
       
     }else{
-      indicator2 =format.Date(c(dateMin-1,max(jourDate)), "%m/%d/%y")
+      
+      indicator2 =format.Date(c(dateMin()-1,max(jourDate)), "%m/%d/%y")
     }
     
     if(is.null(input$variable)){
@@ -266,7 +329,7 @@ server <- function(input, output, session) {
       }else if(variable =="Nouveaux cas par période"){
         
         datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
-        if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
+        if(indicator2[1] == format.Date(dateMin()-1, "%m/%d/%y")){
           
           datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]
         }else{
@@ -299,7 +362,7 @@ server <- function(input, output, session) {
       }else{
         
         datamaille_codeSel<-datamaille_code()%>%select(maille_code, Pop)
-        if(indicator2[1] == format.Date(dateMin-1, "%m/%d/%y")){
+        if(indicator2[1] == format.Date(dateMin()-1, "%m/%d/%y")){
           
           datamaille_codeSel$ncases<-datamaille_code()[,indicator2[2]]
         }else{
@@ -390,33 +453,13 @@ server <- function(input, output, session) {
     
   })
   
-  output$Slider<-renderUI({
-    
-    if(is.null(input$variable)){
-      
-    }else{
-      if(input$variable %in% c("Nombre total de cas", "Nombre total de cas/population")){
-        sliderInput("day1", "Jour", dateMin, max(jourDate),
-                    value =  c(max(jourDate)),animate = T, step = 1
-                    
-                    #dateMin,
-        )}else{
-          sliderInput("day2", "Jour", dateMin, max(jourDate),
-                      value =  c(max(jourDate)-2,max(jourDate)),animate = T, step = 1
-                      
-                      #dateMin,
-          )
-          
-        }
-    }
-  })
   
   output$selection <- renderUI({
     if(input$choices =="Hospitalisation"){
-      radioButtons("variable", choices =  c("Hospitalisations par période"="Nouveaux cas par période",
-                                            "Hospitalisations par période /habitants"="Nouveaux cas par période/population",
-                                            "Total hospitalisations"="Nombre total de cas",
-                                            'Total hospitalisation /habitants'='Nombre total de cas/population' ),
+      radioButtons("variable", choices =  c("Somme Cumulée Hospitalisations par période"="Nouveaux cas par période",
+                                            "Somme Cumulée Hospitalisations par période /habitants"="Nouveaux cas par période/population",
+                                            "Somme Cumulée Hospitalisations"="Nombre total de cas",
+                                            'Somme Cumulée Hospitalisations /habitants'='Nombre total de cas/population' ),
                    label = "Indicateur")
     }else if(input$choices =="Décès"){
       radioButtons("variable", choices =   c("Décès par période"="Nouveaux cas par période",
@@ -427,10 +470,10 @@ server <- function(input, output, session) {
       
       
     }else{
-      radioButtons("variable", choices =   c("Hospitalisation en réa par période"="Nouveaux cas par période",
-                                             "Hospitalisation en réa par période /habitants"="Nouveaux cas par période/population",
-                                             "Total Hospitalisation en réa"="Nombre total de cas",
-                                             'Total Hospitalisation en réa /habitants'='Nombre total de cas/population' ),
+      radioButtons("variable", choices =   c("Evolution du nombre d'hospitalisations en réa par période"="Nouveaux cas par période",
+                                             "Evolution du nombre d'hospitalisations en réa par période /habitants"="Nouveaux cas par période/population",
+                                             "Nombre Hospitalisations en réa à un jour donné"="Nombre total de cas",
+                                             'Nombre Hospitalisations en réa à un jour donné /habitants'='Nombre total de cas/population' ),
                    label = "Indicateur")
       
       
